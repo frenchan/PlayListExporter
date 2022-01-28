@@ -1,0 +1,18 @@
+{
+  "name": "playlistexporter",
+  "version": "1.0.0",
+  "description": "Export Play List from Spotify",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "nodemon src/app.js"
+  },
+  "author": "Roberto Vega",
+  "license": "ISC",
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "express": "^4.17.2",
+    "querystring": "^0.2.1",
+    "request": "^2.88.2"
+  }
+}
