@@ -4,7 +4,7 @@
     <title>Example of the Authorization Code flow with Spotify</title>
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
     <style type="text/css">
-      #login, #loggedin, #playlists, #createplaylist {
+      #login, #loggedin, #playlists, #export {
         display: none;
       }
       .text-overflow {
@@ -12,6 +12,15 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         width: 500px;
+      }
+      .column {
+        float: left;
+        width: 50%;
+      }
+      .row:after {
+        content: "";
+        display: table;
+        clear: both;
       }
     </style>
   </head>
@@ -22,18 +31,27 @@
         <h1>This is an example of the Authorization Code flow</h1>
         <a href="/login" class="btn btn-primary">Log in with Spotify</a>
       </div>
-      <div id="loggedin">
-        <div id="user-profile">
+      <div class="row">
+        <div class="column">
+          <div id="loggedin">
+            <div id="user-profile">
+            </div>
+            <div id="oauth">
+            </div>
+            <button class="btn btn-default" id="obtain-new-token">Obtain new token using the refresh token</button>
+            <button class="btn btn-playlist" id="get-playlists">Get user play lists</button>
+          </div>
+          <div id="playlists">
+          </div>
+          <div id="createplaylist">
+          </div>
         </div>
-        <div id="oauth">
+        <div class="column">
+          <div id="export">
+          </div>
         </div>
-        <button class="btn btn-default" id="obtain-new-token">Obtain new token using the refresh token</button>
-        <button class="btn btn-playlist" id="get-playlists">Get user play lists</button>
       </div>
-      <div id="playlists">
-      </div>
-      <div id="createplaylist">
-      </div>
+      
     </div>
 
     <script id="user-profile-template" type="text/x-handlebars-template">
@@ -88,7 +106,19 @@
     </script>
 
     <script id="export-template" type="text/x-handlebars-template">
-
+      <h2>Total songs for export: {{Songs}}</h2>
+      <div>
+        <h3>Select playlist to save songs or Create a new Playlist</h3>
+        <ul id="listOfPlaylist">
+        {{#each Playlists}}
+          <li>
+            <span>{{ name }}</span>
+            <input type="checkbox" name="playlist" class="check-playlist" data-id="{{id}}" />
+          </li>
+        {{/each}}
+        </ul>
+        <button id="saveToPlaylist" data-id="{{ id }}">Save to Playlist</button>
+      </div>
     </script>
 
     <script src="http://cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
@@ -125,6 +155,10 @@
 
         var songsSource = document.getElementById('songs-template').innerHTML,
             songsTemplate = Handlebars.compile(songsSource);
+
+        var exportSource = document.getElementById('export-template').innerHTML,
+            exportTemplate = Handlebars.compile(exportSource),
+            exportPlaceholder = document.getElementById('export');
 
         var params = getHashParams();
 
@@ -187,9 +221,31 @@
             }).success(function(data) {
               playlistsPlaceholder.innerHTML = playslistsTemplate(data);
 
+              var playLists = JSON.parse(localStore.getItem('playlists'));
+              if (!playLists) {
+               
+                localStore.setItem('playlists', JSON.stringify(data.items));
+              }
+              else {
+                var mergedPlayLists = [...playLists, ...data.items];
+                var updatedPlayLists = getUniqueListBy(mergedPlayLists, 'id');
+                localStore.setItem('playlists', JSON.stringify(updatedPlayLists));
+              }
+
               $('#loggedin').hide();
               $('#login').hide();
               $('#playlists').show();
+
+              if(localStore.songs) {
+                $('#export').show();
+                var songs = JSON.parse(localStore.songs);
+                var dataModel = {
+                  Songs: songs.length,
+                  Playlists: JSON.parse(localStore.playlists)
+                };
+                console.log(dataModel);
+                exportPlaceholder.innerHTML = exportTemplate(dataModel);
+              }
             });
           }, false);
 
@@ -248,20 +304,65 @@
                 
               if (!songList) {
                 localStore.setItem('songs', JSON.stringify(songs));
-
+                $('#export').show();
               }
               else {
                 var mergedSongList = [...songList, ...songs];
                 var updatedSongList = getUniqueListBy(mergedSongList, 'Id');
-
+                songs = updatedSongList;
                 localStore.setItem('songs', JSON.stringify(updatedSongList));
               }
-            }  
+            } 
+            
+            var dataModel = {
+              Songs: songs.length,
+              Playlists: JSON.parse(localStore.playlists)
+            };
+
+            exportPlaceholder.innerHTML = exportTemplate(dataModel);
           };
 
           function getUniqueListBy(arr, key) {
               return [...new Map(arr.map(item => [item[key], item])).values()]
           };
+
+          $(document).on('click', '#saveToPlaylist', function() {
+
+            var params = getHashParams();
+            var access_token = params.access_token;
+            var storedSongs = JSON.parse(localStore.songs);           
+            var uriSongList = [];
+            var playlists = document.getElementById('listOfPlaylist').getElementsByTagName('INPUT');
+            var playlistId = '';
+
+            for(var i = 0; i<playlists.length; i++) {
+              if(playlists[i].checked) {
+                console.log(playlists[i].dataset.id);
+                playlistId = playlists[i].dataset.id;
+              }
+            }
+            console.log(playlistId);
+            for(var i = 0; i<storedSongs.length; i++) {
+              uriSongList.push(storedSongs[i].Uri);
+            }
+
+            var json_str = JSON.stringify(uriSongList);
+            document.cookie = 'songs=' + json_str;
+
+
+            $.ajax({
+              url: '/add_to_playlist',
+              data: {
+                'playlist_id': playlistId,
+                'access_token': access_token
+              }
+            }).done(function(data) {
+              access_token = data.access_token;
+              oauthPlaceholder.innerHTML = oauthTemplate({
+                access_token: access_token
+              });
+            });
+          });
         }
       })();
     </script>

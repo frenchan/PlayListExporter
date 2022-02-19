@@ -27,7 +27,7 @@ return text;
 };
 
 var stateKey = 'spotify_auth_state';
-var scopes = 'user-read-private user-read-email playlist-read-collaborative';
+var scopes = ['playlist-modify-public', 'playlist-modify-private'];
 
 const app = express();    
 
@@ -39,10 +39,10 @@ app.get('/login', (req, res) => {
     var state = generateRandomString(16);
     res.cookie(stateKey, state);
 
-    const paramsString = `response_type=code&client_id=${client_id}&scopes=${scopes}&redirect_uri=${redirect_uri}&state=${state}`;
+    const paramsString = `response_type=code&client_id=${client_id}&scope=${scopes}&redirect_uri=${redirect_uri}&state=${state}`;
     let searchParams = new URLSearchParams(paramsString);
 
-    res.redirect('https://accounts.spotify.com/authorize?' + searchParams.toString() );
+    res.redirect('https://accounts.spotify.com/authorize?' + searchParams.toString());
 });
 
 app.get('/callback', function(req, res) {
@@ -130,6 +130,25 @@ app.get('/get_playlists', (req, res) => {
             res.redirect('/#' + paramsString.toString());
         }
     });
+});
+
+app.get('/add_to_playlist', (req, res) =>  {
+    var authToken = req.query.access_token;
+    var playlistId = req.query.playlist_id;
+
+    var options = {
+        url: `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+        headers: { 'Authorization': 'Bearer ' + authToken},
+        body: {'uris':JSON.parse(req.cookies.songs)},
+        json: true
+    };
+
+    request.post(options, (error, response, body) => {
+        console.log(response.statusCode);
+        if (!error && response.statusCode === 200) {
+            res.clearCookie('songs')
+        }
+    });  
 });
 
 app.get('/refresh_token', (res, req) => {
